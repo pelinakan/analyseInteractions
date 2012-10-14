@@ -10,6 +10,7 @@ struct temppars{
 class PromoterClass{ //Probe Clusters Associated with a Promoter
 	friend class NegCtrlClass;
 	friend class ProbeSet;
+	friend class RESitesClass;
 	vector <string> ChrNames_refseq;
 	vector < vector <int> > refseq_indexes; //Based on refseq gene chromosome
 public:
@@ -18,7 +19,7 @@ temppars *tp;
 void InitialiseData(void);
 void ReadPromoterAnnotation();
 void WriteBinCoverage(string,int);
-void ReadBinCoverage(string,int); // If the SAMFILE already processed, read the number of reads per bin
+void ReadBinCoverage(string, int, RESitesClass&, MappabilityClass&); // If the SAMFILE already processed, read the number of reads per bin
 void BinPromoterInteractor(int,int,int,int);
 void BinPeaks(int,int,int,int);
 void PrintEnrichments_PerTSS(string,int);
@@ -122,7 +123,7 @@ RefSeqfilename.append("mm9_refseq_sortedbyname_withexpression.txt");
 ifstream RefSeq_file(RefSeqfilename.c_str());
 #endif
 #ifdef WINDOWS
-	ifstream RefSeq_file("mm9_refseq_sortedbyname_withexpression.txt");
+	ifstream RefSeq_file("mm9_refseq_NMonly_sortedbyname_withexpression.txt");
 #endif
 	vector <int> isoformprs; // to keep isoform promoters
 	vector <string> tr_ids;
@@ -177,8 +178,9 @@ ifstream RefSeq_file(RefSeqfilename.c_str());
 		tp[0].expression[1]=tp[1].expression[1];
 		tp[0].expression[2]=tp[1].expression[2];
 
-		if(geneindex%10000==0)
-			cout << geneindex << "    Promoters Annotated" << endl;
+		if(geneindex%100==0)
+			break;
+			//cout << geneindex << "    Promoters Annotated" << endl;
 
 	}while(tp[1].name!="END");
 
@@ -211,9 +213,9 @@ ifstream RefSeq_file(RefSeqfilename.c_str());
 		refseq[i].AllExperiments_IntBins.resize(NumberofExperiments);
 		for(int e=0;e<NumberofExperiments;++e){
 			for(int j=0;j<refseq[i].isoformpromotercoords.size();++j){
-				refseq[i].AllExperiments_IntBins[e].interactorbins.push_back(vector <int> ());
+				refseq[i].AllExperiments_IntBins[e].interactorbins.push_back(vector <double> ());
 				refseq[i].AllExperiments_IntBins[e].Interactor.push_back(vector <double>());
-				refseq[i].AllExperiments_IntBins[e].EnrichedBins.push_back(vector <int> ());
+				refseq[i].AllExperiments_IntBins[e].ClusteredEnrichedBins.push_back(vector <double> ());
 			}
 		}
 		for(int k=0;k<NumberofPeakFiles;++k)
@@ -347,10 +349,12 @@ for(i=0;i<NofPromoters;++i){
 }
 
 
-void PromoterClass::ReadBinCoverage(string InputFileNameBase,int ExperimentNum){ // If the SAMFILE already processed, read the number of reads per bin
+void PromoterClass::ReadBinCoverage(string InputFileNameBase,int ExperimentNum, RESitesClass& dpnIIsites, MappabilityClass& mappability){ // If the SAMFILE already processed, read the number of reads per bin
 	int i,j,k,t;
 	string infilename,temp;
-	
+#ifdef UNIX
+	infilename.append(dirname.c_str());
+#endif
 	infilename.append(InputFileNameBase);
 	infilename.append("CoveragePerBin_proms.txt");
 	ifstream infile(infilename.c_str());
@@ -358,9 +362,38 @@ void PromoterClass::ReadBinCoverage(string InputFileNameBase,int ExperimentNum){
 		for(k=0;k<refseq[i].isoformpromotercoords.size();++k){
 			for(t=0;t<5;t++)
 				infile >> temp;
-			for(j=1;j<NumberofBins;++j)
+			for(j=1;j<NumberofBins;++j){
+				int bincoordst = 0, recount = 0;
+				double mapp;
 				infile >> refseq[i].AllExperiments_IntBins[ExperimentNum].interactorbins[k][j];
+				//get the bin coordinate
+				if (refseq[i].strand == "+" ){
+					if (j < NumberofBins/2 )
+						bincoordst = refseq[i].isoformpromotercoords[k] - (NofInteractorBins-j)*BinSize; 
+					else
+						bincoordst = refseq[i].isoformpromotercoords[k] + (j-NofInteractorBins)*BinSize; 
+				}
+				else{
+					if ( j < NumberofBins/2)
+						bincoordst = refseq[i].isoformpromotercoords[k] + (NofInteractorBins-j)*BinSize; 
+					else
+						bincoordst = refseq[i].isoformpromotercoords[k] - (j- NofInteractorBins)*BinSize; 
+				}
+				if (refseq[i].AllExperiments_IntBins[ExperimentNum].interactorbins[k][j] > MinNumberofPairs){
+					mapp = mappability.GetMappability(refseq[i].chr, bincoordst);
+					if (mapp < 0.80)
+						refseq[i].AllExperiments_IntBins[ExperimentNum].interactorbins[k][j] = 0;
+					else{
+						recount = dpnIIsites.GetRESitesCount(refseq[i].chr, bincoordst);
+						if(recount != 0)
+							refseq[i].AllExperiments_IntBins[ExperimentNum].interactorbins[k][j]/=recount;
+					}
+				}
+				//divide it to the number of restriction enzyme sites on this bin
+			}
 		}
+		if (i%1000 == 0)
+			cout << i << "   Promoter Coverage Read " << endl;
 	}
 	infile.close();
 }

@@ -15,6 +15,7 @@ public:
 	vector <string> ChrNames;
 	vector <int> peakcenters;
 	vector <double> peaksignals;
+	vector < bool > activepeak;
 	void ReadPeakFile(ifstream&,bool);
 	void AnnotatewithPromoters(PromoterClass&,int);
 	void AnnotatewithNegCtrls(NegCtrlClass&,int);
@@ -26,7 +27,13 @@ private:
 	void PrintEnrichments(ofstream&,vector<double>,vector<double>&,vector<int>);
 };
 PeakClass::~PeakClass(){
-
+	abnames.clear();
+	ChrNames.clear();
+	ChrRowStartIndexes.clear();
+	ChrRowEndIndexes.clear();
+	peakcenters.clear();
+	peaksignals.clear();
+	activepeak.clear();
 }
 
 void PeakClass::ReadPeakFile(ifstream &peakfile, bool ifBEDFile){

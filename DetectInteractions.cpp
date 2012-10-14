@@ -32,6 +32,10 @@
 using namespace std;
 #include "ap.h"
 
+#ifdef _CHAR16T //redefined definition problem
+#define CHAR16_T
+#endif
+
 //#define UNIX
 #define WINDOWS
 
@@ -62,28 +66,32 @@ using namespace alglib_impl;
 
 const int NUM_OF_THREADS=8;
 const int BUFFERSIZE=50000;
-const int NumberofPeakFiles=7;
-const double SignificanceThreshold=0.001;
-const int MinNumberofPairs=2;
-const int MinNumberofPeaksPerBin=0;
+const int NumberofPeakFiles=6;
+const double SignificanceThreshold = 0.001;
+const int MinNumberofPairs = 2.1;
+const int MinNumberofPeaksPerBin = 0;
 const int NumberofGenes=24900;
 const int NofNegCtrls=400;
 const int NofIsoforms=20;
 const int ClusterPromoters=5000; //Cluster Promoters of Isoforms that are 5 kb away from each other
 const int AssociateInteractions=5000; //decide if an interaction comes from a feature or not
-const int ExcludeOutliers=10;
+const int ExcludeOutliers=100;
 const int NumberofExperiments = 1;
 int NofInteractorBins; // Depends on the maximum allowed junction distance
-int MaxJunctionDistance=100000;
-int BinSize=5000;
+int MaxJunctionDistance = 500000;
+int BinSize = 5000;
 int NumberofBins;
 double ExpressionThr=2.0;
 int CellType=0; // 0:mES, 1:XEN, 2:TS
 int padding=700; //For Sequence Capture Probes
+string dirname = "/bubo/proj/b2011029/DATA/BinnedInteractions/";
 
+ofstream po_file("PeakOverlapSummary.txt");
 
 #include "DataStructs.h"
 #include "AssociateProbeswithFeatures.h"
+#include "RESitesCount.h"
+#include "Mappability.h"
 #include "PromoterClass.h"
 #include "NegativeControls.h"
 #include "GetOptions.h"
@@ -97,6 +105,10 @@ int padding=700; //For Sequence Capture Probes
 void ProcessPeaks(PromoterClass& Promoters, NegCtrlClass& NegativeControls,PeakClass& PC,DetectEnrichedBins& EnrichedBins,string &PeakFN, string abname, bool ifBED,string INTERACTIONFILENAMEBASE,int CellType,int abindex,int ExperimentIndex){
 	ifstream PeakFile;
 	PeakFile.open(PeakFN.c_str());
+	if (abname.substr(0,2) == "HS")
+		ifBED = 1;
+	else 
+		ifBED = 0;
 	PC.ReadPeakFile(PeakFile,ifBED);
 	PeakFile.close();
 	
@@ -110,35 +122,22 @@ void ProcessPeaks(PromoterClass& Promoters, NegCtrlClass& NegativeControls,PeakC
 }
 
 int main (int argc,char* argv[]){
+
+	MappabilityClass mappability;
+	mappability.InitialiseVars();
+//	mappability.GetMappability("chrX", 70000000);
+
+	RESitesClass DpnIICounts;
+//	DpnIICounts.CreateIndexFile_RESites();
+//	DpnIICounts.WriteRESitesText_toBinaryFile();
+
+	DpnIICounts.InitialiseVars();
+	int recounts = DpnIICounts.GetRESitesCount("chr10", 5000000);
+
 string INTERACTIONFILENAMEBASE, BaseFileName;
-#ifdef UNIX
- //FOR UNIX
-
-	if (argc < 5) {
-		print_usage();
-		return -1;
-	}
-	INTERACTIONFILENAMEBASE.append(argv[1]);
-	CellType=atoi(argv[2]);
-	BinSize=atoi(argv[3]);
-	MaxJunctionDistance=(atoi(argv[4]));
 	NofInteractorBins=(MaxJunctionDistance)/BinSize;
 	NumberofBins=NofInteractorBins*2;
-	cout << "INTERACTORFILENAMEBASE" << INTERACTIONFILENAMEBASE << endl;
-	cout << "Cell Type        " <<  CellType << endl;
-	cout << "Bin Size         " << BinSize     << endl;
-	cout << "Max Junction Distance " << MaxJunctionDistance << endl;
-	cout << "Number of Bins on Each Side    " << NofInteractorBins << endl;
 
-
-#endif
-#ifdef WINDOWS
-//	INTERACTIONFILENAMEBASE="3C-mES_BR1_5kbBins_MaxJD100kb_";
-	BinSize=5000;
-	MaxJunctionDistance=500000;
-	NofInteractorBins=(MaxJunctionDistance)/BinSize;
-	NumberofBins=NofInteractorBins*2;
-#endif
 //   --        INITIALISE CLASSES   --
 	PromoterClass Promoters;
 	NegCtrlClass NegativeControls;
@@ -169,15 +168,15 @@ string ext1,ext2,FileName1,FileName2,FileName3,FileName4;
 
 
 #ifdef SAM_FILE_ALREADY_PROCESSED
-	ifstream ExperimentsFile("Experiments.txt");
+	ifstream ExperimentsFile("Experiments.txt"); //Contains the name of the experiments to process
 	for(int experimentindex=0; experimentindex<NumberofExperiments;++experimentindex){
 		ExperimentsFile >> INTERACTIONFILENAMEBASE;
-		Promoters.ReadBinCoverage(INTERACTIONFILENAMEBASE,experimentindex);
-		NegativeControls.ReadBinCoverage(INTERACTIONFILENAMEBASE,experimentindex);
+		Promoters.ReadBinCoverage(INTERACTIONFILENAMEBASE,experimentindex, DpnIICounts, mappability);
+		NegativeControls.ReadBinCoverage(INTERACTIONFILENAMEBASE,experimentindex, DpnIICounts, mappability);
 		//CALCULATE BACKGROUND LEVELS	
-		cout << INTERACTIONFILENAMEBASE << "       Background Levels Calculated" << endl;		
 		BackgroundLevels.InitialiseVars();
 		BackgroundLevels.CalculateMeanandStd(Promoters, NegativeControls,INTERACTIONFILENAMEBASE,experimentindex);
+		cout << INTERACTIONFILENAMEBASE << "       Background Levels Calculated" << endl;		
 		//DETECT INTERACTIONS ABOVE BACKGROUND LEVELS FOR EACH BIN
 		EnrichedBins.InitialiseData();
 		EnrichedBins.DetectEnrichedInteractionBins(Promoters,BackgroundLevels.mean,BackgroundLevels.stdev,INTERACTIONFILENAMEBASE,experimentindex);
@@ -187,7 +186,7 @@ string ext1,ext2,FileName1,FileName2,FileName3,FileName4;
 		string PeakFileName;
 		int abindex=0;
 		ifstream AbNameFile;
-		AbNameFile.open("Abnames.txt");
+		AbNameFile.open("AbNames.txt");
 		do{
 			AbNameFile >> PeakFileName >> ext1;
 			if(PeakFileName.compare("END")==0)
@@ -208,12 +207,13 @@ string ext1,ext2,FileName1,FileName2,FileName3,FileName4;
 		cout << INTERACTIONFILENAMEBASE << "          All Peak Files Read" << endl;
 		
 		EnrichedBins.PrintMetaAssociationwithPeaks(Promoters,NegativeControls,INTERACTIONFILENAMEBASE,experimentindex);
-
+	
 		AbNameFile.close();
 		BackgroundLevels.~DetermineBackgroundLevels();
 		EnrichedBins.~DetectEnrichedBins();
 		INTERACTIONFILENAMEBASE.clear(); 
 	}
+
 #ifdef UNIX		
 		ofstream GFFFILE("/bubo/proj/b2011029/bin/3CAnalysis/GFF_File.txt");
 #endif
@@ -224,5 +224,7 @@ string ext1,ext2,FileName1,FileName2,FileName3,FileName4;
 		ofstream BEDFILE("/bubo/proj/b2011029/bin/3CAnalysis/BED_file.txt");
 #endif
 		UCSCTracks.WriteBEDFiles(Promoters,BEDFile);
+
 #endif
+
 }

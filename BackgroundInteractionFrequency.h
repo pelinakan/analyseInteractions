@@ -12,14 +12,15 @@ public:
 	void CalculateMeanandStd(PromoterClass&,NegCtrlClass&,string,int);
 	void CalculateMeanandStdRegress(PromoterClass&,string,int);
 
-	~DetermineBackgroundLevels();
+	void ClearBackgroundLevels();
 
 private:
 	void LinearRegression(int,double*,double*,string);
 
 };
-DetermineBackgroundLevels::~DetermineBackgroundLevels(){
-
+void DetermineBackgroundLevels::ClearBackgroundLevels(){
+	delete []mean;
+	delete []stdev;
 }
 void DetermineBackgroundLevels::InitialiseVars(void){
 
@@ -172,6 +173,9 @@ for(i=1;i<NumberofBins;i++){
 	stdev[i]=sqrt(stdev[i]);
 }	
 */
+#ifdef UNIX
+	filen.append(dirname.c_str());
+#endif
 filen.append(BaseFileName);
 filen.append("BackgroundLevels.txt");
 

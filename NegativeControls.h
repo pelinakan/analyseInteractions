@@ -7,7 +7,7 @@ int NofNegCtrls;
 void InitialiseData(void);
 void FillNegativeCtrls();
 void WriteBinCoverage(string,int);
-void ReadBinCoverage(string,int); // If the SAMFILE already processed, read the number of reads per bin
+void ReadBinCoverage(string,int, RESitesClass&, MappabilityClass&); // If the SAMFILE already processed, read the number of reads per bin
 void AssociateProbeswithNegativeControls(ProbeSet&);
 void BinPeaks(int,int,int);
 
@@ -83,9 +83,9 @@ NofNegCtrls=i-1;
 		negctrls[i].AllPeaks_PeakBins.resize(NumberofPeakFiles);
 		negctrls[i].AllExperiments_IntBins.resize(NumberofExperiments);
 		for(int e=0; e<NumberofExperiments;++e){
-			negctrls[i].AllExperiments_IntBins[e].interactorbins.push_back(vector <int> ());
+			negctrls[i].AllExperiments_IntBins[e].interactorbins.push_back(vector <double> ());
 			negctrls[i].AllExperiments_IntBins[e].Interactor.push_back(vector <double>());
-			negctrls[i].AllExperiments_IntBins[e].EnrichedBins.push_back(vector <int> ());
+			negctrls[i].AllExperiments_IntBins[e].ClusteredEnrichedBins.push_back(vector <double> ());
 		}
 		for(int j=0;j<NumberofPeakFiles; ++j){
 			negctrls[i].AllPeaks_PeakBins[j].PeakBins.push_back(vector <int> ());
@@ -155,16 +155,36 @@ for(i=0;i<NofNegCtrls;++i){
 }
 }
 
-void NegCtrlClass::ReadBinCoverage(string InputFileNameBase,int whichexperiment){ // If the SAMFILE already processed, read the number of reads per bin
+void NegCtrlClass::ReadBinCoverage(string InputFileNameBase,int whichexperiment, RESitesClass& dpnIIsites, MappabilityClass& mappability) // If the SAMFILE already processed, read the number of reads per bin
+{ // If the SAMFILE already processed, read the number of reads per bin
 	int i,j;
 	string infilename;
-	
+#ifdef UNIX
+	infilename.append(dirname.c_str());
+#endif	
 	infilename.append(InputFileNameBase);
 	infilename.append("CoveragePerBin_negctrls.txt");
 	ifstream infile(infilename.c_str());
 	for(i=0;i<NofNegCtrls;++i){
-		for(j=0;j<NumberofBins;++j)
+		for(j=0;j<NumberofBins;++j){
+			int bincoordst = 0, recount = 0;
+			double mapp;
 			infile >> negctrls[i].AllExperiments_IntBins[whichexperiment].interactorbins[0][j];
+			if (j < NumberofBins/2 )
+				bincoordst = negctrls[i].midpoint - (NofInteractorBins-j)*BinSize; 
+			else
+				bincoordst = negctrls[i].midpoint + (j-NofInteractorBins)*BinSize; 
+			if (negctrls[i].AllExperiments_IntBins[whichexperiment].interactorbins[0][j] > MinNumberofPairs){
+				mapp = mappability.GetMappability(negctrls[i].chr, bincoordst);
+				if (mapp < 0.80)
+						negctrls[i].AllExperiments_IntBins[whichexperiment].interactorbins[0][j] = 0;
+					else{
+						recount = dpnIIsites.GetRESitesCount(negctrls[i].chr, bincoordst);
+						if(recount != 0)
+							negctrls[i].AllExperiments_IntBins[whichexperiment].interactorbins[0][j]/=recount;
+					}
+			}
+		}
 	}
 	infile.close();
 }

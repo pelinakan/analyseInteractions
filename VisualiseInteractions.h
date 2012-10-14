@@ -21,7 +21,9 @@ void VisualiseInteractions::InitialiseColorMatrix(void){
 #endif	
 	int index;
 	string temp;
+#ifdef WINDOWS
 	ifstream cfile("ColorCoding.txt");
+#endif
 	Colors = new ColorStruct[7];
 	for(int i=0;i<7;++i){
 		cfile >> temp >> index;
@@ -32,36 +34,35 @@ void VisualiseInteractions::InitialiseColorMatrix(void){
 void VisualiseInteractions::WriteGFFFiles(PromoterClass& prs,ofstream& GFFFile){
 
 int gffindex;
-int ColorIndex;
+int ColorIndex = 1;
 for(int i=0;i<prs.NofPromoters;++i){
-	for(int j=0;j<prs.refseq[i].isoformpromotercoords.size();++j){
-		gffindex=0;
-		for(int b=1;b<NumberofBins;++b){
-			ColorIndex=DetermineColor(prs,i,j,b);
-			if(ColorIndex!=-1){ // If there is an interaction
-				WritePromoterLine(prs,GFFFile,i,j,gffindex);
-				WriteEnhancerLine(prs,GFFFile,i,j,b,gffindex);
-				++gffindex;
-			}
+	gffindex=0;
+	//		ColorIndex=DetermineColor(prs,i,j,b);
+	//		if(ColorIndex!=-1){ // If there is an interaction
+	for(int j = 0; j < prs.refseq[i].AllExperiments_IntBins[0].ClusteredEnrichedBins.size();++j){
+		if( prs.refseq[i].AllExperiments_IntBins[0].ClusteredEnrichedBins[j].size() >= 1){
+			WritePromoterLine(prs,GFFFile,i,0,gffindex);
+			WriteEnhancerLine(prs,GFFFile,i,0,prs.refseq[i].AllExperiments_IntBins[0].ClusteredEnrichedBins[j][0],gffindex);
+			++gffindex;
 		}
+	
 	}
 }
 
 }
 void VisualiseInteractions::WriteBEDFiles(PromoterClass& prs,ofstream& BEDFile){
-int ColorIndex;
+int ColorIndex = 1;
 
 
 InitialiseColorMatrix();
 
 BEDFile << "track name="  << "Interactions" << "description=" << " BEDformat" << " visibility=2 itemRgb=" << "On" << endl;
 for(int i=0;i<prs.NofPromoters;++i){
-	for(int j=0;j<prs.refseq[i].isoformpromotercoords.size();++j){
-		for(int b=1;b<NumberofBins;++b){
-			ColorIndex=DetermineColor(prs,i,j,b);
-			if(ColorIndex!=-1){ // If there is an interaction
-				WriteBEDLine(prs,BEDFile,i,j,b,ColorIndex);
-			}
+	for(int j = 0; j < prs.refseq[i].AllExperiments_IntBins[0].ClusteredEnrichedBins.size();++j){
+		if( prs.refseq[i].AllExperiments_IntBins[0].ClusteredEnrichedBins[j].size() >= 1){
+//			ColorIndex=DetermineColor(prs,i,j,b);
+//			if(ColorIndex!=-1){ // If there is an interaction
+			WriteBEDLine(prs,BEDFile,i,0,prs.refseq[i].AllExperiments_IntBins[0].ClusteredEnrichedBins[j][0],ColorIndex);
 		}
 	}
 }
@@ -87,7 +88,7 @@ void VisualiseInteractions::WriteEnhancerLine(PromoterClass &prs,ofstream& gfile
 
 int VisualiseInteractions::DetermineColor(PromoterClass& prs,int prindex, int isoformindex,int binindex){
 
-
+// If there are more than one experiment
 	if(prs.refseq[prindex].AllExperiments_IntBins[0].Interactor[isoformindex][binindex] == 1 && 
 	   prs.refseq[prindex].AllExperiments_IntBins[1].Interactor[isoformindex][binindex] == 1 && 
 	   prs.refseq[prindex].AllExperiments_IntBins[2].Interactor[isoformindex][binindex] == 1)

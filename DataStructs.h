@@ -9,9 +9,9 @@ struct AllPeakStruct{
 	vector < vector < int > > PeakBins; 
 };
 struct InteractionStruct{
-	vector < vector < int > > interactorbins; // the number of reads in the bins
+	vector < vector < double > > interactorbins; // the number of reads in the bins
 	vector < vector < double > > Interactor; // If a bin has a distal interactor
-	vector < vector < int > > EnrichedBins;
+	vector < vector < double > > ClusteredEnrichedBins;
 };
 
 struct FeatureStruct{
